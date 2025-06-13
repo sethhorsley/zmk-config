@@ -1,7 +1,44 @@
 name: Build ZMK Firmware
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     uses: zmkfirmware/zmk/.github/workflows/build-user-config.yml@main
+
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Get commit hash
+        id: commit
+        run: echo "hash=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Create tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git tag "v1.0.0-${{ steps.commit.outputs.hash }}"
+          git push origin "v1.0.0-${{ steps.commit.outputs.hash }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0.0-${{ steps.commit.outputs.hash }}
+          name: Release v1.0.0-${{ steps.commit.outputs.hash }}
+          files: artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
